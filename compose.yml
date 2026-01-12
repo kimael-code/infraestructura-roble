@@ -1,0 +1,116 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: app.Dockerfile
+      args:
+        TZ: ${TZ:-UTC}
+        LOCALE: ${LOCALE:-en_US.UTF-8}
+    image: roble/app
+    restart: "${APP_RESTART_POLICY:-always}"
+    container_name: roble_app
+    ports:
+      - "${PHP_FORWARD_PORT:-9000}:9000"
+      - "${REVERB_FORWARD_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./src/roble/.env
+    volumes:
+      - roble-app:/var/www/html
+    networks:
+      - roble-network
+    healthcheck:
+      test: [ "CMD-SHELL", "php-fpm-healthcheck || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  webserver:
+    build:
+      context: .
+      dockerfile: nginx.Dockerfile
+      args:
+        TZ: ${TZ:-UTC}
+        LOCALE: ${LOCALE:-en_US.UTF-8}
+    image: roble/webserver
+    restart: "${WEBSERVER_RESTART_POLICY:-always}"
+    container_name: roble_webserver
+    ports:
+      - "${WEBSERVER_PORT:-80}:80"
+      - "${WEBSERVER_SSL_PORT:-443}:443"
+    depends_on:
+      - app
+    networks:
+      - roble-network
+    environment:
+      - SERVER_NAME=${SERVER_NAME:-localhost}
+      - REVERB_SERVER_PORT=${REVERB_FORWARD_PORT:-8080}
+      - PHP_SERVER_PORT=${PHP_FORWARD_PORT:-9000}
+    volumes:
+      - roble-app:/var/www/html
+      - roble-certbot-www:/var/www/certbot
+      - roble-certbot-conf:/etc/letsencrypt
+      - ./ssl/local-dev:/etc/letsencrypt/live/localhost
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: roble_certbot
+    volumes:
+      - roble-certbot-conf:/etc/letsencrypt
+      - roble-certbot-www:/var/www/certbot
+    environment:
+      - SERVER_NAME=${SERVER_NAME:-localhost}
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL:-admin@example.com}
+    # Comando para renovación automática (se ejecuta y duerme 12h)
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+    depends_on:
+      - webserver
+    networks:
+      - roble-network
+
+  db:
+    build:
+      context: .
+      dockerfile: database.Dockerfile
+      args:
+        TZ: ${TZ:-UTC}
+        LOCALE: ${LOCALE:-en_US.UTF-8}
+    image: roble/db
+    restart: "${DB_RESTART_POLICY:-always}"
+    container_name: roble_db
+    ports:
+      - "${FORWARD_DB_PORT:-5432}:5432"
+    environment:
+      PGPASSWORD: "${DB_PASSWORD:-secret}"
+      POSTGRES_DB: "${DB_DATABASE}"
+      POSTGRES_USER: "${DB_USERNAME}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-secret}"
+    volumes:
+      - "roble-db:/var/lib/postgresql/data"
+    networks:
+      - roble-network
+    healthcheck:
+      test:
+        - CMD
+        - pg_isready
+        - "-q"
+        - "-d"
+        - "${DB_DATABASE}"
+        - "-U"
+        - "${DB_USERNAME}"
+      retries: 3
+      timeout: 5s
+
+networks:
+  roble-network:
+    external: "${DOCKER_NETWORK_EXTERNAL:-false}"
+    name: "${DOCKER_NETWORK_NAME:-roble}"
+
+volumes:
+  roble-app:
+  roble-db:
+  roble-certbot-conf:
+  roble-certbot-www:

@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.gitlab-ci.yml
+.github
+
+# Documentation
+README.md
+docs/
+*.md
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies (se instalan en build)
+src/*/node_modules
+src/*/vendor
+
+# Build artifacts (se generan en build)
+src/*/public/build
+src/*/bootstrap/ssr
+
+# Storage
+src/*/storage/logs/*
+src/*/storage/framework/cache/*
+src/*/storage/framework/sessions/*
+src/*/storage/framework/views/*
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+src/*/.phpunit.cache
+src/*/coverage
+
+# Logs
+logs/
+*.log
