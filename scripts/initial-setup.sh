@@ -50,7 +50,7 @@ print_header "Configuración Inicial de Roble"
 # ============================================
 # 1. VERIFICAR DEPENDENCIAS
 # ============================================
-print_header "[1/7] Verificando dependencias del sistema"
+print_header "[1/6] Verificando dependencias del sistema"
 
 # Verificar Docker
 if ! command -v docker &> /dev/null; then
@@ -74,43 +74,6 @@ if ! command -v git &> /dev/null; then
 fi
 print_step "Git instalado: $(git --version)"
 
-# Verificar rsync
-if ! command -v rsync &> /dev/null; then
-    print_warning "rsync no está instalado, instalando..."
-    
-    # Detectar gestor de paquetes y sistema operativo
-    if command -v apt-get &> /dev/null; then
-        # Debian/Ubuntu
-        sudo apt-get update && sudo apt-get install -y rsync
-    elif command -v dnf &> /dev/null; then
-        # Fedora/RHEL 8+/CentOS 8+
-        sudo dnf install -y rsync
-    elif command -v yum &> /dev/null; then
-        # RHEL/CentOS 7 and older
-        sudo yum install -y rsync
-    elif command -v pacman &> /dev/null; then
-        # Arch Linux
-        sudo pacman -S --noconfirm rsync
-    elif command -v zypper &> /dev/null; then
-        # openSUSE/SLES
-        sudo zypper install -y rsync
-    elif command -v apk &> /dev/null; then
-        # Alpine Linux
-        sudo apk add rsync
-    else
-        print_error "No se pudo detectar el gestor de paquetes"
-        print_warning "Por favor instala rsync manualmente:"
-        echo "  - Debian/Ubuntu: sudo apt-get install rsync"
-        echo "  - RHEL/CentOS:   sudo yum install rsync"
-        echo "  - Fedora:        sudo dnf install rsync"
-        echo "  - Arch:          sudo pacman -S rsync"
-        echo "  - openSUSE:      sudo zypper install rsync"
-        echo "  - Alpine:        sudo apk add rsync"
-        exit 1
-    fi
-fi
-print_step "rsync instalado"
-
 # Verificar permisos de Docker
 if ! docker ps &> /dev/null; then
     print_error "El usuario actual no tiene permisos para usar Docker"
@@ -123,7 +86,7 @@ print_step "Permisos de Docker OK"
 # ============================================
 # 2. CONFIGURAR DIRECTORIO DE TRABAJO
 # ============================================
-print_header "[2/7] Configurando directorio de trabajo"
+print_header "[2/6] Configurando directorio de trabajo"
 
 # Solicitar directorio de instalación
 read -p "Directorio de instalación [/opt/roble]: " INSTALL_DIR
@@ -140,13 +103,12 @@ cd "$INSTALL_DIR"
 print_step "Directorio de trabajo: $INSTALL_DIR"
 
 # ============================================
-# 3. CLONAR REPOSITORIOS
+# 3. CLONAR REPOSITORIO DE INFRAESTRUCTURA
 # ============================================
-print_header "[3/7] Clonando repositorios"
+print_header "[3/6] Clonando repositorio de infraestructura"
 
-# Solicitar URLs de repositorios
+# Solicitar URL del repositorio de infraestructura
 read -p "URL del repositorio de infraestructura: " INFRA_REPO
-read -p "URL del repositorio de aplicación: " APP_REPO
 
 # Clonar infraestructura
 if [ ! -d "infraestructura-roble" ]; then
@@ -157,45 +119,89 @@ else
     print_warning "Repositorio de infraestructura ya existe"
 fi
 
-# Clonar aplicación
-if [ ! -d "roble" ]; then
-    print_warning "Clonando repositorio de aplicación..."
-    git clone "$APP_REPO" roble
-    print_step "Aplicación clonada"
+# Entrar al directorio de infraestructura
+cd infraestructura-roble
+
+# ============================================
+# 4. CLONAR APLICACIÓN EN src/
+# ============================================
+print_header "[4/6] Clonando aplicación en src/"
+
+# Solicitar URL del repositorio de aplicación
+read -p "URL del repositorio de aplicación: " APP_REPO
+
+# Crear directorio src si no existe
+mkdir -p src
+
+# Clonar aplicación directamente en src/roble
+if [ ! -d "src/roble" ]; then
+    print_warning "Clonando repositorio de aplicación en src/roble/..."
+    git clone "$APP_REPO" src/roble
+    print_step "Aplicación clonada en src/roble/"
 else
-    print_warning "Repositorio de aplicación ya existe"
+    print_warning "Aplicación ya existe en src/roble/"
 fi
 
 # ============================================
-# 4. CONFIGURAR VARIABLES DE ENTORNO
+# 5. CONFIGURAR VARIABLES DE ENTORNO
 # ============================================
-print_header "[4/7] Configurando variables de entorno"
+print_header "[5/6] Configurando variables de entorno"
 
-cd roble
+cd src/roble
 
 if [ ! -f ".env" ]; then
     print_warning "Configurando variables de entorno..."
     echo ""
-    echo "Configura las variables de entorno para tu aplicación."
-    echo "Valores recomendados para producción:"
-    echo "  - DB_HOST: db"
-    echo "  - DB_PORT: 5432"
-    echo "  - APP_ENV: production"
-    echo "  - APP_DEBUG: false"
-    echo ""
-    read -p "Presiona ENTER para continuar..."
     
-    # Si existe install.sh, ejecutarlo
+    # Si existe install.sh, preguntar si quiere usarlo
     if [ -f "install.sh" ]; then
-        chmod +x install.sh
-        ./install.sh
-    else
-        # Crear .env básico desde .env.example
+        echo "Se detectó un script de instalación personalizado (install.sh)"
+        echo ""
+        read -p "¿Deseas ejecutar install.sh para configurar .env? (S/n): " RUN_INSTALL
+        RUN_INSTALL=${RUN_INSTALL:-S}
+        
+        if [[ $RUN_INSTALL =~ ^[Ss]$ ]]; then
+            chmod +x install.sh
+            print_warning "Ejecutando install.sh..."
+            echo ""
+            
+            # Ejecutar install.sh y capturar el código de salida
+            # Desactivamos temporalmente 'set -e' para manejar errores
+            set +e
+            ./install.sh
+            INSTALL_EXIT_CODE=$?
+            set -e
+            
+            if [ $INSTALL_EXIT_CODE -eq 0 ]; then
+                print_step "install.sh completado exitosamente"
+            else
+                print_warning "install.sh terminó con código $INSTALL_EXIT_CODE"
+                print_warning "Continuando con configuración manual..."
+            fi
+        fi
+    fi
+    
+    # Si no existe .env después de install.sh (o se omitió), crear desde .env.example
+    if [ ! -f ".env" ]; then
         if [ -f ".env.example" ]; then
             cp .env.example .env
-            print_warning "Archivo .env creado desde .env.example"
-            print_warning "IMPORTANTE: Edita .env con tus valores antes de continuar"
+            print_step "Archivo .env creado desde .env.example"
+            echo ""
+            print_warning "IMPORTANTE: Debes editar .env con tus valores de producción"
+            echo ""
+            echo "Variables críticas a configurar:"
+            echo "  - APP_URL: URL de tu aplicación"
+            echo "  - DB_HOST: db (para Docker)"
+            echo "  - DB_PORT: 5432"
+            echo "  - DB_DATABASE: nombre de tu base de datos"
+            echo "  - DB_USERNAME: usuario de base de datos"
+            echo "  - DB_PASSWORD: contraseña segura"
+            echo ""
             read -p "Presiona ENTER cuando hayas editado .env..."
+        else
+            print_error "No se encontró .env.example"
+            print_warning "Debes crear .env manualmente antes de continuar"
+            exit 1
         fi
     fi
     
@@ -204,36 +210,43 @@ else
     print_warning "Archivo .env ya existe"
 fi
 
-cd ..
-
 # ============================================
-# 5. SINCRONIZAR CÓDIGO
+# CONFIGURAR .ENV DE INFRAESTRUCTURA
 # ============================================
-print_header "[5/7] Sincronizando código a infraestructura"
+print_header "Configurando .env de infraestructura"
 
-cd infraestructura-roble
+cd ../..
 
-# Remover enlace/directorio anterior
-rm -rf src/roble
-
-# Copiar archivos
-print_warning "Copiando archivos..."
-rsync -av \
-  --exclude='node_modules' \
-  --exclude='vendor' \
-  --exclude='.git' \
-  --exclude='public/build' \
-  --exclude='bootstrap/ssr' \
-  --exclude='storage/logs/*' \
-  ../roble/ \
-  src/roble/
-
-print_step "Código sincronizado"
+# Verificar si existe .env.example
+if [ ! -f ".env.example" ]; then
+    print_warning "No se encontró .env.example de infraestructura"
+else
+    # Crear .env si no existe
+    if [ ! -f ".env" ]; then
+        cp .env.example .env
+        print_step ".env de infraestructura creado"
+    fi
+    
+    # Preguntar por FORWARD_DB_PORT
+    echo ""
+    echo "Puerto de redirección de PostgreSQL (para acceso externo/desarrollo)"
+    read -p "Puerto [5432]: " FORWARD_DB_PORT
+    FORWARD_DB_PORT=${FORWARD_DB_PORT:-5432}
+    
+    # Solo descomentar/configurar si es diferente de 5432
+    if [ "$FORWARD_DB_PORT" != "5432" ]; then
+        # Descomentar y actualizar la línea
+        sed -i "s~^#FORWARD_DB_PORT=.*~FORWARD_DB_PORT=$FORWARD_DB_PORT~" .env
+        print_step "FORWARD_DB_PORT configurado: $FORWARD_DB_PORT"
+    else
+        print_step "Usando puerto default (5432), variable no necesaria"
+    fi
+fi
 
 # ============================================
 # 6. CONSTRUIR IMÁGENES DOCKER
 # ============================================
-print_header "[6/7] Construyendo imágenes Docker"
+print_header "[6/6] Construyendo imágenes Docker"
 
 print_warning "Este proceso tomará 5-10 minutos..."
 echo ""
@@ -321,7 +334,7 @@ print_header "✅ Instalación Completada"
 
 echo ""
 echo "Roble ha sido instalado exitosamente en:"
-echo "  📁 $INSTALL_DIR"
+echo "  📁 $INSTALL_DIR/infraestructura-roble"
 echo ""
 echo "Servicios corriendo:"
 docker compose ps

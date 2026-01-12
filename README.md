@@ -35,8 +35,6 @@
 - Git
 - A domain name (for production SSL)
 
-> **Note:** The `initial-setup.sh` script automatically detects and installs `rsync` on Debian/Ubuntu, RHEL/CentOS, Fedora, Arch Linux, openSUSE, and Alpine systems.
-
 ### 1. Clone and Configure
 
 > **Note:** For production deployment, see the [Production Deployment](#production-deployment) section which uses an automated setup script.
