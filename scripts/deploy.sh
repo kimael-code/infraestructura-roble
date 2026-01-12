@@ -94,7 +94,7 @@ log "Iniciando despliegue..."
 # ============================================
 # 1. PULL LATEST CODE
 # ============================================
-print_header "[1/6] Actualizando código fuente"
+print_header "[1/5] Actualizando código fuente"
 
 log "Actualizando repositorio de infraestructura..."
 git fetch origin
@@ -102,8 +102,8 @@ CURRENT_BRANCH=$(git branch --show-current)
 git reset --hard origin/$CURRENT_BRANCH
 print_step "Infraestructura actualizada (rama: $CURRENT_BRANCH)"
 
-cd ../roble
 log "Actualizando repositorio de aplicación..."
+cd src/roble
 git fetch origin
 CURRENT_APP_BRANCH=$(git branch --show-current)
 git reset --hard origin/$CURRENT_APP_BRANCH
@@ -112,49 +112,13 @@ print_step "Aplicación actualizada (rama: $CURRENT_APP_BRANCH)"
 cd "$DEPLOY_DIR"
 
 # ============================================
-# 2. SYNC CODE TO INFRASTRUCTURE
-# ============================================
-print_header "[2/6] Sincronizando código"
-
-log "Sincronizando código de aplicación a infraestructura..."
-
-# Backup del .env actual
-if [ -f "src/roble/.env" ]; then
-    cp src/roble/.env /tmp/.env.backup
-    print_info "Backup de .env creado"
-fi
-
-# Remove old directory
-rm -rf src/roble
-
-# Copy files
-rsync -av \
-  --exclude='node_modules' \
-  --exclude='vendor' \
-  --exclude='.git' \
-  --exclude='public/build' \
-  --exclude='bootstrap/ssr' \
-  --exclude='storage/logs/*' \
-  ../roble/ \
-  src/roble/
-
-# Restore .env
-if [ -f "/tmp/.env.backup" ]; then
-    cp /tmp/.env.backup src/roble/.env
-    rm /tmp/.env.backup
-    print_info ".env restaurado"
-fi
-
-print_step "Código sincronizado"
-
-# ============================================
-# 3. BUILD DOCKER IMAGES
+# 2. BUILD DOCKER IMAGES
 # ============================================
 if [ "$SKIP_BUILD" = true ]; then
-    print_header "[3/6] Build de imágenes (OMITIDO)"
+    print_header "[2/5] Build de imágenes (OMITIDO)"
     print_warning "Usando imágenes Docker existentes"
 else
-    print_header "[3/6] Construyendo imágenes Docker"
+    print_header "[2/5] Construyendo imágenes Docker"
     
     log "Iniciando build de imágenes..."
     print_warning "Este proceso tomará 5-10 minutos..."
@@ -172,9 +136,9 @@ else
 fi
 
 # ============================================
-# 4. DEPLOY CONTAINERS (ZERO DOWNTIME)
+# 3. DEPLOY CONTAINERS (ZERO DOWNTIME)
 # ============================================
-print_header "[4/6] Desplegando contenedores"
+print_header "[3/5] Desplegando contenedores"
 
 log "Deteniendo contenedores antiguos..."
 
@@ -203,13 +167,13 @@ fi
 print_step "Contenedores desplegados"
 
 # ============================================
-# 5. RUN MIGRATIONS
+# 4. RUN MIGRATIONS
 # ============================================
 if [ "$SKIP_MIGRATIONS" = true ]; then
-    print_header "[5/6] Migraciones de BD (OMITIDAS)"
+    print_header "[4/5] Migraciones de BD (OMITIDAS)"
     print_warning "Migraciones omitidas por flag --skip-migrations"
 else
-    print_header "[5/6] Ejecutando migraciones"
+    print_header "[4/5] Ejecutando migraciones"
     
     log "Esperando a que la base de datos esté lista..."
     
@@ -235,9 +199,9 @@ else
 fi
 
 # ============================================
-# 6. OPTIMIZE APPLICATION
+# 5. OPTIMIZE APPLICATION
 # ============================================
-print_header "[6/6] Optimizando aplicación"
+print_header "[5/5] Optimizando aplicación"
 
 log "Optimizando aplicación..."
 

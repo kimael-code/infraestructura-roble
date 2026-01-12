@@ -37,3 +37,6 @@ $RECYCLE.BIN/
 
 # Linux trash folder which might appear on any partition or disk
 .Trash-*
+
+# Certificados SSL locales (generados para desarrollo)
+ssl/local-dev/
